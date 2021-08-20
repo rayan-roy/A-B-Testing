@@ -1,0 +1,196 @@
+---
+title: "Wish Experimentation"
+author: "Rayan Roy"
+date: "20/08/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(lmtest)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+[Wish](wish.com) in an online retailer offering hundreds of thousands of products at steep discounts. Founded in 2011, Wish was originally designed as ‘Pinterest for products’ where users could curate a ‘wish list’ of items available for sale on other websites. Since pivoting to an e-commerce business model, Wish has expanded to over 160 countries and become the primary online shopping destination for budget-conscious consumers. 
+
+The data science team at Wish is currently experimenting with a pop-up feature to learn how various discount offerings impact client's shopping behaviour with the goal of converting more browsers (users who view the site but don’t purchase) to purchasers. In particular, the team is interested in understanding how the browser-to-purchaser (BTP) conversion rate depends on discount amount and discount duration. They would also like to determine which combination of discount amount and duration results in the highest BTP conversion rate. 
+
+To investigate this, the team designs an experiment in which users browsing the website are shown a targeted pop-up above the product they are interested in, offering a time-sensitive discount. The pop-ups are configured in accordance with a factorial design in which the $m=9$ different combinations of discount amount (5%, 10%, or 15%) and discount duration (15, 30, or 60 minutes) are considered. The team randomly assigns $n=500$ users to each discount condition. For each of these users, whether they make a purchase is recorded. The data are available in the file `wish.csv`.
+
+$\;$
+
+(a)	What is the metric of interest and what is the corresponding response variable?
+
+The metric of interest is the browser-to-purchaser (BTP) conversion rate and the corresponding response variable is the binary indicator record, whether each of the user browsing Wish's website makes a purchase or not.
+
+$\;$
+
+(b)	What are the design factors and what are their levels?
+
+Design factor 1: The discount amount
+
+-Levels: 5%, 10%, 15%
+
+Design factor 2: The discount duration
+
+-Levels: 15 minutes, 30 minutes, 60 minutes
+
+$\;$
+
+(c)	What are the experimental units?
+
+The experimental units are the users browsing the Wish's website.
+
+$\;$
+
+(d)	Construct and interpret the interaction effects plot for the factors identified in (b). Comment on which condition appears to be optimal. 
+
+```{r, tidy=FALSE}
+wish <- read.csv("wish.csv")
+
+Purchase <- as.numeric(as.factor(wish$Purchase)) - 1
+wish$Amount <- factor(wish$Amount, levels = c("5%", "10%", "15%"), 
+                        labels = c("5%", "10%", "15%"))
+wish$Duration <- factor(wish$Duration, levels = c(15,30,60), 
+                       labels = c("15 mins", "30 mins", "60 mins"))
+
+ad.combined <- aggregate(Purchase, by = list(Amount = wish$Amount, 
+                                             Duration = wish$Duration), FUN = mean)
+ad.combined
+interaction.plot(wish$Amount, wish$Duration, Purchase, 
+                 main = "Amount-by-Duration Interaction", 
+                 xlab = "Amount", ylab = "Browser-to-purchaser rate", ylim = c(0,0.3),
+                 trace.label = "Duration")
+points(x = c(1,1,1,2,2,2,3,3,3), y = ad.combined$x[c(1,4,7,2,5,8,3,6,9)], pch = 16)
+```
+
+From the above plot, we can see that an interaction between the discount amount and discount duration exists. We see that the browser-to-purchaser (BTP) conversion rate is higher under 15 minutes of duration than the other two levels (30 min, 60 min) for all the discount amounts of 5%, 10%, and 15%. This means that no matter what duration we choose, the BTP conversion rate is largest when the discount amount is at 15%. Lastly, we see the BTP conversion rate is maximized (optimal) when the discount duration is 15 minutes and when the discount amount is at 15%.
+
+$\;$
+
+(e)	Consider a regression model that includes both the factors’ main effects as well as their two-factor interaction. 
+
+    * State the hypothesis that would be tested to determine whether the two-factor interaction effect is significant. Define any notation you introduce.
+    * For this hypothesis, calculate the relevant test statistic. State the equation of the test statistic, the test statistic value, and the null distribution of the test statistic.
+    * For this hypothesis, calculate the relevant p-value. State both the equation of the p-value and the calculated value.
+    * Based on the calculated p-value, state whether you REJECT or FAIL TO REJECT the null hypothesis at a 5% level of significance, and draw a conclusion about the significance of the two-factor interaction.
+    
+The linear predictor here is 
+$$\beta_0+\beta_1x_{i1}+\beta_2x_{i2}+\beta_3x_{i3}+\beta_4x_{i4}+\beta_5x_{i1}x_{i3}+\beta_6x_{i1}x_{i4}+\beta_7x_{i2}x_{i3}+\beta_8x_{i2}x_{i4}$$
+where
+
+$x_{i1}=1$ if unit $i$ is in a condition with discount amount of 10% and $0$ if not
+
+$x_{i2}=1$ if unit $i$ is in a condition with discount amount of 15% and $0$ if not
+
+$x_{i3}=1$ if unit $i$ is in a condition with discount duration of 60 minutes and $0$ if not
+
+$x_{i4}=1$ if unit $i$ is in a condition with discount duration of 30 minutes and $0$ if not 
+
+$\;$
+
+We test if the two-factor interaction is significant via a hypothesis test:
+
+$$H_0: \beta_5=\beta_6=\beta_7=\beta_8=0\ vs.\ H_A: \beta_j\neq0\ for\ some\ j=5,6,7,8$$
+
+Fitting the model and calculating the likelihood ratio test:
+```{r}
+main <- glm(Purchase ~ wish$Amount + wish$Duration, family = binomial(link = "logit"))
+full <- glm(Purchase ~ wish$Amount * wish$Duration, family = binomial(link = "logit"))
+lrtest(main, full)
+```
+
+The corresponding test statistic value for the LRT is:
+
+$t=2\times[log$-$likelihood_{full\ model}\ -\ log$-$likelihood_{reduced\ model}]= 4.4118$
+
+The p-value is:
+
+$$p-value=Pr(T\geq4.4118)=0.3531$$ where $T\sim\chi^2_{(4)}$
+
+Since the p-value = 0.3531 > 0.05, we fail to reject the null hypothesis and conclude that the two-factor interaction is not significant.
+
+
+$\;$
+
+(f)	Construct main effect plots for each of the design factors identified in (b). Briefly describe the manner in which each factor influences the response, and identify the factor that appears to have the strongest influence.
+
+```{r}
+par(mfrow=c(1,2))
+aggregate_purchase <- aggregate(Purchase, by = list(Amount = wish$Amount), FUN = mean)
+plot(x = 1:3, y = aggregate_purchase$x, 
+     pch = 16, ylim = c(0, 0.3), xaxt = "n", xlab = "Amount", 
+     ylab = "Browser-to-purchaser rate", main = "Main Effect of Amount")
+lines(x = 1:3, y = aggregate_purchase$x)
+axis(side = 1, at = 1:3, labels = levels(wish$Amount))
+
+aggregate_duration <- aggregate(Purchase, by = list(Duration = wish$Duration), FUN = mean)
+plot(x = 1:3, y = aggregate_duration$x, 
+     pch = 16, ylim = c(0, 0.3), xaxt = "n", xlab = "Duration", 
+     ylab = "Browser-to-purchaser rate", main = "Main Effect of Duration")
+lines(x = 1:3, y = aggregate_duration$x)
+axis(side = 1, at = 1:3, labels = levels(wish$Duration))
+```
+
+From the above plots, we see that both design factors (amount, duration) appear to have influence on the result. We see as discount amount increases, the BTP conversion rate also increases. Thus with respect to the discount amount, we see 15% discount is better than 10% discount which in turn is superior to the 5% discount amount. We also see the BTP conversion rate is the highest when the duration is 15 minutes, followed by 60 minutes and then 30 minutes. In conclusion, the discount amount appears to be more influential than the discount duration since the change in BTP conversion rate produced by changes in discount amount is larger in magnitude than those produced by the changes in discount duration. 
+
+
+(g)	Consider a regression model that includes only the factors’ main effects. 
+
+    * For each factor, state the hypothesis that would be tested to determine whether the main effect of that factor is significant. Define any notation you introduce.
+    * For each of these hypotheses, calculate the relevant test statistic. State the equations of the test statistics, the test statistics' values, and their corresponding null distributions.
+    * For each of the hypotheses, calculate the relevant p-value. State both the equation of the p-value and the calculated value.
+    * Based on the calculated p-values, state whether you REJECT or FAIL TO REJECT the corresponding null hypotheses at a 5% level of significance, and draw a conclusion about which factor(s) have significant main effects.
+
+The full model for main effects is:
+$$\beta_0+\beta_1x_{i1}+\beta_2x_{i2}+\beta_3x_{i3}+\beta_4x_{i4}$$
+
+where 
+
+$x_{i1}=1$ if unit $i$ is in a condition with discount amount of 10% and $0$ if not. 
+
+$x_{i2}=1$ if unit $i$ is in a condition with discount amount of 15% and $0$ if not.
+
+$x_{i3}=1$ if unit $i$ is in a condition with discount duration of 60 minutes and $0$ if not. 
+
+$x_{i4}=1$ if unit $i$ is in a condition with discount duration of 30 minutes and $0$ if not. 
+
+To test the effects of discount amount in the context of the main effects model, we test for:
+
+$$H_0: \beta_1=\beta_2=0\ vs.\ H_A: \beta_j\neq0\ for\ some\ j=1,2$$
+Fitting the model:
+```{r}
+main <- glm(Purchase ~ wish$Amount + wish$Duration, family = binomial(link = "logit"))
+reduced1 <- glm(Purchase ~ wish$Duration, family = binomial(link = "logit"))
+lrtest(reduced1, main)
+```
+The test statistic value is:
+
+$t=2\times[log$-$likelihood_{full\ model}\ -\ log$-$likelihood_{reduced\ model}]= 56.774$
+
+The p-value is: 
+
+$$p-value=Pr(T\geq56.774)= 4.696e-13$$ where $T\sim\chi^2_{(2)}$
+
+$\;$
+
+To test the effects of discount duration in the context of the main effects model, we test for:
+
+$$H_0: \beta_3=\beta_4=0\ vs.\ H_A: \beta_j\neq0\ for\ some\ j=3,4$$
+
+Fitting the model:
+```{r}
+main <- glm(Purchase ~ wish$Amount + wish$Duration, family = binomial(link = "logit"))
+reduced2 <- glm(Purchase ~ wish$Amount, family = binomial(link = "logit"))
+lrtest(reduced2, main)
+```
+The Test Statistic value is:
+
+$t=2\times[log$-$likelihood_{full\ model}\ -\ log$-$likelihood_{reduced\ model}]= 41.305$
+
+The p-value is: 
+
+$$p-value=Pr(T\geq56.774)= 1.073e-09$$ where $T\sim\chi^2_{(2)}$
+
+
+At the 5% significance level we reject the $H_0$ in both the tests (i.e Factor 1: Discount Amount and Factor 2: Discount Duration). Thus, we can conclude that main effects of both the discount amount and discount duration factor significantly influence the browser-to-purchaser (BTP) conversion rate. 
